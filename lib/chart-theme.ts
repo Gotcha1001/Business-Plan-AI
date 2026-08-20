@@ -1,4 +1,4 @@
-import type { CvStyleTheme } from "@/lib/styles";
+import type { PlanStyleTheme } from "@/lib/styles";
 
 export interface CvChartPalette {
   primary: string;
@@ -73,7 +73,7 @@ const CHART_PALETTES: Record<string, CvChartPalette> = {
 const DEFAULT_PALETTE = CHART_PALETTES.neutral;
 
 export function getChartPalette(
-  theme: Pick<CvStyleTheme, "id">,
+  theme: Pick<PlanStyleTheme, "id">,
 ): CvChartPalette {
   return CHART_PALETTES[theme.id] ?? DEFAULT_PALETTE;
 }
