@@ -18,7 +18,7 @@ import {
 import { useUserContext } from "@/app/context/UserContext";
 import type { Doc } from "@/convex/_generated/dataModel";
 
-function statusMeta(status: Doc<"cvs">["status"]) {
+function statusMeta(status: Doc<"businessPlans">["status"]) {
   switch (status) {
     case "ready":
       return { icon: CheckCircle2, variant: "default" as const };
@@ -33,11 +33,11 @@ function statusMeta(status: Doc<"cvs">["status"]) {
 
 export default function DashboardOverviewPage() {
   const user = useUserContext();
-  const cvs = useQuery(api.cvs.listMyCvs);
+  const plans = useQuery(api.businessPlans.listMyPlans);
 
-  const readyCount = cvs?.filter((c) => c.status === "ready").length ?? 0;
-  const draftCount = cvs?.filter((c) => c.status === "draft").length ?? 0;
-  const recent = cvs?.slice(0, 5) ?? [];
+  const readyCount = plans?.filter((p) => p.status === "ready").length ?? 0;
+  const draftCount = plans?.filter((p) => p.status === "draft").length ?? 0;
+  const recent = plans?.slice(0, 5) ?? [];
 
   return (
     <div className="relative isolate min-h-screen overflow-hidden">
@@ -58,7 +58,7 @@ export default function DashboardOverviewPage() {
     to `transparent`) — a low-opacity photo on white reads as washed
     out, so the wash carries most of the depth and the image opacity
     above is raised too so it doesn't disappear entirely. */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-indigo-950/30 via-slate-900/20 to-purple-950/35 dark:from-indigo-950/40 dark:via-black/60 dark:to-purple-950/30 pointer-events-none" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-indigo-950/30 via-slate-900/20 to-purple-950/35 dark:from-indigo-950/40 dark:via-black/30 dark:to-purple-950/45" />
 
       <div className="relative z-10 max-w-4xl mx-auto space-y-8 px-6 pt-16 pb-20">
         <motion.div
@@ -67,7 +67,7 @@ export default function DashboardOverviewPage() {
           transition={{ duration: 0.4 }}
         >
           <p className="text-sm font-medium tracking-wide uppercase text-purple-600 dark:text-purple-400">
-            Same you, tailored on demand
+            Same idea, sharper numbers
           </p>
           <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-medium tracking-tight text-zinc-900 dark:text-white">
             Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
@@ -79,7 +79,7 @@ export default function DashboardOverviewPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: "Total CVs", value: cvs?.length ?? 0 },
+            { label: "Total plans", value: plans?.length ?? 0 },
             { label: "Ready to share", value: readyCount },
             { label: "Drafts", value: draftCount },
           ].map((stat, i) => (
@@ -102,42 +102,44 @@ export default function DashboardOverviewPage() {
 
         <div className="flex gap-3">
           <Link href="/dashboard/create">
-            <Button className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/30">
+            <Button className="gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/20">
               <FilePlus2 size={16} />
-              Create a CV
+              Create a plan
             </Button>
           </Link>
-          <Link href="/dashboard/cvs">
+          <Link href="/dashboard/plans">
             <Button
               variant="outline"
               className="gap-2 border-zinc-900/20 dark:border-white/20 text-zinc-900 dark:text-white hover:border-purple-600 hover:text-purple-600 dark:hover:border-purple-400 dark:hover:text-purple-400"
             >
               <FileText size={16} />
-              View all CVs
+              View all plans
             </Button>
           </Link>
         </div>
 
         <div className="space-y-3">
           <h2 className="font-[family-name:var(--font-display)] text-lg text-zinc-900 dark:text-white">
-            Recent CVs
+            Recent plans
           </h2>
-          {cvs?.length === 0 && (
+          {plans?.length === 0 && (
             <p className="text-sm text-zinc-900/60 dark:text-white/60">
-              Nothing here yet — your first CV is a couple of steps away.
+              Nothing here yet — your first plan is a couple of steps away.
             </p>
           )}
-          {recent.map((cv) => {
-            const { icon: Icon, variant } = statusMeta(cv.status);
+          {recent.map((plan) => {
+            const { icon: Icon, variant } = statusMeta(plan.status);
             return (
               <Link
-                key={cv._id}
+                key={plan._id}
                 href={
-                  cv.status === "ready" ? `/cv/${cv.shareId}` : "/dashboard/cvs"
+                  plan.status === "ready"
+                    ? `/plan/${plan.shareId}`
+                    : "/dashboard/plans"
                 }
-                target={cv.status === "ready" ? "_blank" : undefined}
-                rel={cv.status === "ready" ? "noreferrer" : undefined}
-                className="flex items-center justify-between rounded-2xl border border-zinc-900/10 dark:border-white/10 bg-white/60 dark:bg-white/5 p-3 hover:border-purple-600/40 dark:hover:border-purple-400/40 transition-colors"
+                target={plan.status === "ready" ? "_blank" : undefined}
+                rel={plan.status === "ready" ? "noreferrer" : undefined}
+                className="flex items-center justify-between rounded-2xl border border-zinc-900/10 dark:border-white/10 bg-white/60 dark:bg-white/5 p-4 hover:border-purple-600/40 dark:hover:border-purple-400/40 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <Icon
@@ -145,10 +147,10 @@ export default function DashboardOverviewPage() {
                     className="text-purple-600 dark:text-purple-400"
                   />
                   <span className="text-sm font-medium text-zinc-900 dark:text-white">
-                    {cv.title}
+                    {plan.title}
                   </span>
                 </div>
-                <Badge variant={variant}>{cv.status}</Badge>
+                <Badge variant={variant}>{plan.status}</Badge>
               </Link>
             );
           })}

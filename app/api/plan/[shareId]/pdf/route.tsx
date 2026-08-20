@@ -3,8 +3,9 @@ import { api } from "@/convex/_generated/api";
 import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 import { NextResponse } from "next/server";
-import { prepareCvData } from "@/lib/cv-data";
+import { preparePlanData } from "@/lib/plan-data";
 import { PDF_LAYOUT_BUILDERS } from "@/lib/pdf-layouts";
+import { getPlanLayoutMeta } from "@/lib/layouts";
 
 export const runtime = "nodejs"; // @react-pdf/renderer needs Node APIs, not edge
 
@@ -14,22 +15,26 @@ export async function GET(
 ) {
   const { shareId } = await params;
 
-  // getByShareId returns { cv, activeVersion } | null
-  const result = await fetchQuery(api.cvs.getByShareId, { shareId });
-  if (!result?.cv || !result?.activeVersion) {
+  // getByShareId returns { plan, activeVersion } | null
+  const result = await fetchQuery(api.businessPlans.getByShareId, {
+    shareId,
+  });
+  if (!result?.plan || !result?.activeVersion) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { cv, activeVersion } = result;
+  const { plan, activeVersion } = result;
 
   // Same data shaping the web preview uses — both args required
-  const data = prepareCvData(cv, activeVersion);
+  const data = preparePlanData(plan, activeVersion);
 
+  const layoutId = getPlanLayoutMeta(activeVersion.layout).id;
   const buildDocument =
-    PDF_LAYOUT_BUILDERS[data.layout.id] ?? PDF_LAYOUT_BUILDERS.centered;
+    PDF_LAYOUT_BUILDERS[layoutId] ?? PDF_LAYOUT_BUILDERS["executive-first"];
 
   const document = buildDocument({
-    cv,
+    plan,
+    version: activeVersion,
     ...data,
   }) as ReactElement<DocumentProps>;
 
@@ -38,7 +43,7 @@ export async function GET(
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${cv.personalInfo.fullName.replace(/\s+/g, "-")}-CV.pdf"`,
+      "Content-Disposition": `attachment; filename="${data.businessName.replace(/\s+/g, "-")}-Business-Plan.pdf"`,
     },
   });
 }

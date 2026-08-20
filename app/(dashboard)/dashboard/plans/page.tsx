@@ -1,3 +1,4 @@
+// app/(dashboard)/dashboard/plans/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,22 +11,20 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"; // npx shadcn add dialog
+} from "@/components/ui/dialog";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { useInterludeAudio } from "@/hooks/use-interlude-audio";
-import { InterludeAudioToggle } from "@/app/components/interlude-audio-toggle";
 
-// Rotated while a CV is generating so the modal feels alive instead of frozen.
+// Rotated while a plan is generating so the modal feels alive instead of frozen.
 const GENERATING_MESSAGES = [
-  "Reading through your experience…",
-  "Matching your background to the role…",
-  "Sharpening your bullet points…",
+  "Reading through your numbers…",
+  "Checking margins and break-even…",
+  "Drafting the executive summary…",
   "Polishing tone and phrasing…",
-  "Almost there — finalizing your CV…",
+  "Almost there — finalizing your plan…",
 ];
 
 // Three orbit rings, each with its own radius, duration, and direction, so
@@ -40,12 +39,9 @@ const ORBITS = [
 
 function GeneratingModal({ open, title }: { open: boolean; title: string }) {
   // Starts at 0 on every mount. The parent remounts this component (via a
-  // `key` keyed on the watched CV's id) whenever the modal opens for a new
-  // CV, so there's no need to reset this from inside an effect.
+  // `key` keyed on the watched plan's id) whenever the modal opens for a new
+  // plan, so there's no need to reset this from inside an effect.
   const [messageIndex, setMessageIndex] = useState(0);
-
-  // Plays only while the modal is open; pauses the moment it closes.
-  const { muted, toggleMute } = useInterludeAudio(open);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +57,7 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
   return (
     <Dialog open={open}>
       {/* No onOpenChange — this closes itself when Convex reports the
-          CV is no longer "generating", not from a user click. */}
+          plan is no longer "generating", not from a user click. */}
       <DialogContent
         className="sm:max-w-md text-center overflow-hidden"
         onInteractOutside={(e) => e.preventDefault()}
@@ -80,8 +76,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
           animate={{ backgroundPosition: ["0% 0%", "100% 60%", "0% 0%"] }}
           transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
         />
-
-        <InterludeAudioToggle muted={muted} onToggle={toggleMute} />
 
         <DialogHeader>
           <DialogTitle className="text-center">
@@ -215,32 +209,34 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
   );
 }
 
-export default function MyCvsPage() {
-  const cvs = useQuery(api.cvs.listMyCvs);
-  const deleteCv = useMutation(api.cvs.deleteCv);
+export default function MyPlansPage() {
+  const plans = useQuery(api.businessPlans.listMyPlans);
+  const deletePlan = useMutation(api.businessPlans.deletePlan);
 
-  // Track which CV's generating-modal the user explicitly picked (only
-  // relevant when more than one CV is generating at once).
+  // Track which plan's generating-modal the user explicitly picked (only
+  // relevant when more than one plan is generating at once).
   const [watchingId, setWatchingId] = useState<string | null>(null);
 
-  const generatingCvs = useMemo(
-    () => (cvs ?? []).filter((cv) => cv.status === "generating"),
-    [cvs],
+  const generatingPlans = useMemo(
+    () => (plans ?? []).filter((plan) => plan.status === "generating"),
+    [plans],
   );
 
   // Derived, not synced: if the explicit pick is (still) generating, use it;
-  // otherwise fall back to whichever CV is generating first. No effect
+  // otherwise fall back to whichever plan is generating first. No effect
   // needed — this recomputes on every render from data we already have, and
-  // naturally "closes" itself once generatingCvs empties out.
+  // naturally "closes" itself once generatingPlans empties out.
   const activeWatchedId =
-    watchingId && generatingCvs.some((cv) => cv._id === watchingId)
+    watchingId && generatingPlans.some((plan) => plan._id === watchingId)
       ? watchingId
-      : (generatingCvs[0]?._id ?? null);
+      : (generatingPlans[0]?._id ?? null);
 
-  const watchedCv = generatingCvs.find((cv) => cv._id === activeWatchedId);
+  const watchedPlan = generatingPlans.find(
+    (plan) => plan._id === activeWatchedId,
+  );
 
   function copyLink(shareId: string) {
-    const url = `${window.location.origin}/cv/${shareId}`;
+    const url = `${window.location.origin}/plan/${shareId}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copied");
   }
@@ -268,21 +264,21 @@ export default function MyCvsPage() {
 
       <div className="relative z-10 max-w-3xl mx-auto space-y-4 px-6 pt-16 pb-20">
         <h1 className="text-2xl font-semibold text-[#12213A] dark:text-[#F6F1E7]">
-          My CVs
+          My Plans
         </h1>
 
-        {cvs?.length === 0 && (
+        {plans?.length === 0 && (
           <p className="text-muted-foreground">
-            No CVs yet — create your first one.
+            No plans yet — create your first one.
           </p>
         )}
 
-        {cvs?.map((cv: Doc<"cvs">) => {
-          const isGenerating = cv.status === "generating";
+        {plans?.map((plan: Doc<"businessPlans">) => {
+          const isGenerating = plan.status === "generating";
 
           return (
             <motion.div
-              key={cv._id}
+              key={plan._id}
               animate={isGenerating ? { opacity: [1, 0.6, 1] } : { opacity: 1 }}
               transition={
                 isGenerating
@@ -294,26 +290,26 @@ export default function MyCvsPage() {
               }`}
             >
               <div>
-                <p className="font-medium">{cv.title}</p>
+                <p className="font-medium">{plan.title}</p>
                 <Badge
                   variant={
-                    cv.status === "ready"
+                    plan.status === "ready"
                       ? "default"
-                      : cv.status === "failed"
+                      : plan.status === "failed"
                         ? "destructive"
                         : "secondary"
                   }
                   className={isGenerating ? "animate-pulse" : ""}
                 >
-                  {cv.status}
+                  {plan.status}
                 </Badge>
               </div>
 
               <div className="flex gap-2">
-                {cv.status === "ready" && (
+                {plan.status === "ready" && (
                   <>
                     <a
-                      href={`/cv/${cv.shareId}`}
+                      href={`/plan/${plan.shareId}`}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -324,7 +320,7 @@ export default function MyCvsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => copyLink(cv.shareId)}
+                      onClick={() => copyLink(plan.shareId)}
                     >
                       Copy link
                     </Button>
@@ -336,22 +332,17 @@ export default function MyCvsPage() {
                     size="sm"
                     variant="outline"
                     className="animate-pulse"
-                    onClick={() => setWatchingId(cv._id)}
+                    onClick={() => setWatchingId(plan._id)}
                   >
                     Generating…
                   </Button>
                 )}
 
                 {/* Edit is always available — jumps to the create form with
-                    ?cvId=, which pre-populates every field via existingCv. */}
-                <Link href={`/dashboard/create?cvId=${cv._id}`}>
+                    ?planId=, which pre-populates every field via existingPlan. */}
+                <Link href={`/dashboard/create?planId=${plan._id}`}>
                   <Button size="sm" variant="outline">
                     Edit
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/cvs/${cv._id}/history`}>
-                  <Button size="sm" variant="outline">
-                    History
                   </Button>
                 </Link>
 
@@ -359,8 +350,8 @@ export default function MyCvsPage() {
                   size="sm"
                   variant="destructive"
                   onClick={() => {
-                    if (confirm("Delete this CV permanently?"))
-                      deleteCv({ cvId: cv._id });
+                    if (confirm("Delete this plan permanently?"))
+                      deletePlan({ planId: plan._id });
                   }}
                 >
                   Delete
@@ -371,9 +362,9 @@ export default function MyCvsPage() {
         })}
 
         <GeneratingModal
-          key={watchedCv?._id ?? "none"}
-          open={!!watchedCv}
-          title={watchedCv?.title ?? ""}
+          key={watchedPlan?._id ?? "none"}
+          open={!!watchedPlan}
+          title={watchedPlan?.title ?? ""}
         />
       </div>
     </div>
