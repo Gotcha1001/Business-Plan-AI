@@ -1,6 +1,5 @@
 // app/(dashboard)/dashboard/plans/page.tsx
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -42,7 +41,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
   // `key` keyed on the watched plan's id) whenever the modal opens for a new
   // plan, so there's no need to reset this from inside an effect.
   const [messageIndex, setMessageIndex] = useState(0);
-
   useEffect(() => {
     if (!open) return;
     // setState here happens inside the timer callback, not synchronously in
@@ -53,7 +51,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
     }, 2200);
     return () => clearInterval(interval);
   }, [open]);
-
   return (
     <Dialog open={open}>
       {/* No onOpenChange — this closes itself when Convex reports the
@@ -76,13 +73,11 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
           animate={{ backgroundPosition: ["0% 0%", "100% 60%", "0% 0%"] }}
           transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
         />
-
         <DialogHeader>
           <DialogTitle className="text-center">
             Generating &quot;{title}&quot;
           </DialogTitle>
         </DialogHeader>
-
         <div className="flex flex-col items-center gap-6 py-6">
           {/* Core icon with layered rings, a rotating gradient halo, and
               particles orbiting at two radii. */}
@@ -97,7 +92,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
               animate={{ rotate: 360 }}
               transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
             />
-
             {/* Expanding pulse rings */}
             {[0, 1, 2].map((ring) => (
               <motion.span
@@ -113,7 +107,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
                 }}
               />
             ))}
-
             {/* Orbiting particles: each wrapper spins, the dot inside is
                 offset from center, so together they trace circular paths */}
             {ORBITS.map((orbit, i) => (
@@ -139,7 +132,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
                 />
               </motion.div>
             ))}
-
             {/* Core sparkle, gently breathing */}
             <motion.div
               className="relative h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-500 flex items-center justify-center text-white text-xl shadow-lg shadow-violet-500/40"
@@ -162,7 +154,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
               </motion.span>
             </motion.div>
           </div>
-
           {/* Cycling status line, gradient text with a soft blur-in/out */}
           <div className="h-5 relative w-full">
             <AnimatePresence mode="wait">
@@ -178,7 +169,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
               </motion.p>
             </AnimatePresence>
           </div>
-
           {/* Indeterminate progress: a sliding gradient sheen rather than a
               single block, so it reads as continuous rather than a bouncing
               bar */}
@@ -199,7 +189,6 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
               }}
             />
           </div>
-
           <p className="text-xs text-muted-foreground">
             Please be patient — this usually takes under a minute.
           </p>
@@ -212,16 +201,13 @@ function GeneratingModal({ open, title }: { open: boolean; title: string }) {
 export default function MyPlansPage() {
   const plans = useQuery(api.businessPlans.listMyPlans);
   const deletePlan = useMutation(api.businessPlans.deletePlan);
-
   // Track which plan's generating-modal the user explicitly picked (only
   // relevant when more than one plan is generating at once).
   const [watchingId, setWatchingId] = useState<string | null>(null);
-
   const generatingPlans = useMemo(
     () => (plans ?? []).filter((plan) => plan.status === "generating"),
     [plans],
   );
-
   // Derived, not synced: if the explicit pick is (still) generating, use it;
   // otherwise fall back to whichever plan is generating first. No effect
   // needed — this recomputes on every render from data we already have, and
@@ -230,17 +216,14 @@ export default function MyPlansPage() {
     watchingId && generatingPlans.some((plan) => plan._id === watchingId)
       ? watchingId
       : (generatingPlans[0]?._id ?? null);
-
   const watchedPlan = generatingPlans.find(
     (plan) => plan._id === activeWatchedId,
   );
-
   function copyLink(shareId: string) {
     const url = `${window.location.origin}/plan/${shareId}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copied");
   }
-
   return (
     <div className="relative isolate min-h-screen overflow-hidden">
       {/* Full-bleed background photo, faded so text stays readable —
@@ -261,21 +244,17 @@ export default function MyPlansPage() {
           out, so the wash carries most of the depth and the image opacity
           above is raised too so it doesn't disappear entirely. */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-indigo-950/30 via-slate-900/20 to-purple-950/35 dark:from-indigo-950/40 dark:via-black/60 dark:to-purple-950/30 pointer-events-none" />
-
       <div className="relative z-10 max-w-3xl mx-auto space-y-4 px-6 pt-16 pb-20">
         <h1 className="text-2xl font-semibold text-[#12213A] dark:text-[#F6F1E7]">
           My Plans
         </h1>
-
         {plans?.length === 0 && (
           <p className="text-muted-foreground">
             No plans yet — create your first one.
           </p>
         )}
-
         {plans?.map((plan: Doc<"businessPlans">) => {
           const isGenerating = plan.status === "generating";
-
           return (
             <motion.div
               key={plan._id}
@@ -304,7 +283,6 @@ export default function MyPlansPage() {
                   {plan.status}
                 </Badge>
               </div>
-
               <div className="flex gap-2">
                 {plan.status === "ready" && (
                   <>
@@ -326,7 +304,6 @@ export default function MyPlansPage() {
                     </Button>
                   </>
                 )}
-
                 {isGenerating && (
                   <Button
                     size="sm"
@@ -337,7 +314,6 @@ export default function MyPlansPage() {
                     Generating…
                   </Button>
                 )}
-
                 {/* Edit is always available — jumps to the create form with
                     ?planId=, which pre-populates every field via existingPlan. */}
                 <Link href={`/dashboard/create?planId=${plan._id}`}>
@@ -345,7 +321,14 @@ export default function MyPlansPage() {
                     Edit
                   </Button>
                 </Link>
-
+                {/* History — like Edit, always available. The history page
+                    itself handles the empty state ("No generations yet"),
+                    so there's no need to gate this on plan.status. */}
+                <Link href={`/dashboard/plans/${plan._id}/history`}>
+                  <Button size="sm" variant="outline">
+                    History
+                  </Button>
+                </Link>
                 <Button
                   size="sm"
                   variant="destructive"
@@ -360,7 +343,6 @@ export default function MyPlansPage() {
             </motion.div>
           );
         })}
-
         <GeneratingModal
           key={watchedPlan?._id ?? "none"}
           open={!!watchedPlan}

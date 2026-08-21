@@ -1,4 +1,14 @@
 // components/layout-select.tsx
+//
+// NEW FILE — not a conversion of an existing one. The old CV app's
+// LayoutSelect (imported by cv-version-edit-form.tsx as
+// "@/app/components/layout-select") was never part of this transform
+// doc, and nothing else in the current plan codebase references a
+// LayoutSelect either — so there was nothing to convert from. Built
+// fresh, modeled on the already-fixed style-select.tsx, against
+// PLAN_LAYOUTS from lib/layouts.ts (flat list, no categories, unlike
+// PLAN_STYLES).
+
 "use client";
 
 import {
@@ -8,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CV_LAYOUTS, DEFAULT_CV_LAYOUT_ID } from "@/lib/layouts";
+import { PLAN_LAYOUTS, getPlanLayoutMeta } from "@/lib/layouts";
 
 export function LayoutSelect({
   value,
@@ -17,30 +27,18 @@ export function LayoutSelect({
   value: string | undefined;
   onValueChange: (id: string) => void;
 }) {
-  const selected = CV_LAYOUTS.find(
-    (l) => l.id === (value ?? DEFAULT_CV_LAYOUT_ID),
-  );
-
   return (
-    <div className="space-y-1.5">
-      <Select
-        value={value ?? DEFAULT_CV_LAYOUT_ID}
-        onValueChange={onValueChange}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Choose a layout" />
-        </SelectTrigger>
-        <SelectContent>
-          {CV_LAYOUTS.map((layout) => (
-            <SelectItem key={layout.id} value={layout.id}>
-              {layout.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {selected && (
-        <p className="text-xs text-muted-foreground">{selected.description}</p>
-      )}
-    </div>
+    <Select value={getPlanLayoutMeta(value).id} onValueChange={onValueChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Choose a layout" />
+      </SelectTrigger>
+      <SelectContent>
+        {PLAN_LAYOUTS.map((layout) => (
+          <SelectItem key={layout.id} value={layout.id}>
+            {layout.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

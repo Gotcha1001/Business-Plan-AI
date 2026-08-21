@@ -64,6 +64,7 @@ export function ExecutiveFirstLayout({
     phone,
     website,
     address,
+    logoUrl,
   } = preparePlanData(plan, version);
 
   const cardHover = CARD_HOVER[theme.id] ?? CARD_HOVER.neutral;
@@ -98,6 +99,21 @@ export function ExecutiveFirstLayout({
 
   return (
     <div className="max-w-5xl mx-auto py-10 px-4">
+      {logoUrl && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="flex justify-center mb-4"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoUrl}
+            alt={`${businessName} logo`}
+            className="h-48 w-48 object-contain rounded-xl"
+          />
+        </motion.div>
+      )}
       {/* -------- Header band -------- */}
       <div className="max-w-2xl mx-auto text-center">
         <motion.h1

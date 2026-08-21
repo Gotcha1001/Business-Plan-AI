@@ -24,12 +24,13 @@ import { MinimalCleanLayout } from "./plan-layouts/minimal-clean";
 import { FinancialChartsLayout } from "./plan-layouts/financial-charts";
 import type { PlanLayoutProps } from "./plan-layouts/types";
 import { JSX } from "react";
+import { InvestorDeckLayout } from "./plan-layouts/investor-deck";
 
 const LAYOUT_COMPONENTS: Partial<
   Record<PlanLayoutId, (props: PlanLayoutProps) => JSX.Element>
 > = {
   "executive-first": ExecutiveFirstLayout,
-  // "investor-deck": InvestorDeckLayout,      // TODO
+  "investor-deck": InvestorDeckLayout,
   "cover-banner": CoverBannerLayout,
   "minimal-clean": MinimalCleanLayout,
   "financial-charts": FinancialChartsLayout,

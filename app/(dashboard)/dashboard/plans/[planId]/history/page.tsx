@@ -1,4 +1,11 @@
-// app/(dashboard)/dashboard/cvs/[cvId]/history/page.tsx
+// app/(dashboard)/dashboard/plans/[planId]/history/page.tsx
+//
+// TRANSFORMED FROM: app/(dashboard)/dashboard/cvs/[cvId]/history/page.tsx
+//
+// No backend changes needed — convex/businessPlans.ts already has
+// listPlanVersions / getPlanVersionContent / setActiveVersion / deleteVersion,
+// mirroring the old cvs.ts version functions exactly (append-only versions).
+
 "use client";
 
 import { useState } from "react";
@@ -15,35 +22,41 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
-import { CvAnimatedView } from "@/app/components/cv-preview";
+import { PlanAnimatedView } from "@/app/components/plan-preview";
 
-export default function CvHistoryPage() {
+export default function PlanHistoryPage() {
   const params = useParams();
   const router = useRouter();
 
   // May be undefined during first paint / bad navigation — never pass that to Convex
-  const cvId = params.cvId as Id<"cvs"> | undefined;
+  const planId = params.planId as Id<"businessPlans"> | undefined;
 
-  const cv = useQuery(api.cvs.getCv, cvId ? { cvId } : "skip");
-  const versions = useQuery(api.cvs.listCvVersions, cvId ? { cvId } : "skip");
-
-  const setActiveVersion = useMutation(api.cvs.setActiveVersion);
-  const deleteVersion = useMutation(api.cvs.deleteVersion);
+  const plan = useQuery(
+    api.businessPlans.getPlan,
+    planId ? { planId } : "skip",
+  );
+  const versions = useQuery(
+    api.businessPlans.listPlanVersions,
+    planId ? { planId } : "skip",
+  );
+  const setActiveVersion = useMutation(api.businessPlans.setActiveVersion);
+  const deleteVersion = useMutation(api.businessPlans.deleteVersion);
 
   const [previewVersionId, setPreviewVersionId] =
-    useState<Id<"cvVersions"> | null>(null);
-  const [deletingId, setDeletingId] = useState<Id<"cvVersions"> | null>(null);
+    useState<Id<"businessPlanVersions"> | null>(null);
+  const [deletingId, setDeletingId] =
+    useState<Id<"businessPlanVersions"> | null>(null);
 
   const previewVersion = useQuery(
-    api.cvs.getCvVersionContent,
+    api.businessPlans.getPlanVersionContent,
     previewVersionId ? { versionId: previewVersionId } : "skip",
   );
 
-  async function handleShare(versionId: Id<"cvVersions">) {
-    if (!cvId) return;
-    await setActiveVersion({ cvId, versionId });
-    if (cv?.shareId) {
-      const link = `${window.location.origin}/cv/${cv.shareId}`;
+  async function handleShare(versionId: Id<"businessPlanVersions">) {
+    if (!planId) return;
+    await setActiveVersion({ planId, versionId });
+    if (plan?.shareId) {
+      const link = `${window.location.origin}/plan/${plan.shareId}`;
       await navigator.clipboard.writeText(link);
       toast.success("Link copied — this version is now the one shared");
     } else {
@@ -51,7 +64,7 @@ export default function CvHistoryPage() {
     }
   }
 
-  async function handleDelete(versionId: Id<"cvVersions">) {
+  async function handleDelete(versionId: Id<"businessPlanVersions">) {
     setDeletingId(versionId);
     try {
       await deleteVersion({ versionId });
@@ -62,15 +75,15 @@ export default function CvHistoryPage() {
     }
   }
 
-  if (!cvId) {
+  if (!planId) {
     return (
       <div className="max-w-3xl mx-auto py-20 px-4 text-center text-muted-foreground">
-        Missing CV id.
+        Missing plan id.
       </div>
     );
   }
 
-  if (versions === undefined || cv === undefined) {
+  if (versions === undefined || plan === undefined) {
     return (
       <div className="max-w-3xl mx-auto py-20 px-4 text-center text-muted-foreground">
         Loading history...
@@ -78,10 +91,10 @@ export default function CvHistoryPage() {
     );
   }
 
-  if (cv === null) {
+  if (plan === null) {
     return (
       <div className="max-w-3xl mx-auto py-20 px-4 text-center text-muted-foreground">
-        CV not found, or you don&apos;t have access to it.
+        Plan not found, or you don&apos;t have access to it.
       </div>
     );
   }
@@ -89,10 +102,15 @@ export default function CvHistoryPage() {
   if (versions.length === 0) {
     return (
       <div className="max-w-3xl mx-auto py-20 px-4 text-center space-y-4 text-muted-foreground">
-        <p>No generations yet — generate this CV to start building history.</p>
-        <Button variant="outline" onClick={() => router.push("/dashboard/cvs")}>
+        <p>
+          No generations yet — generate this plan to start building history.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => router.push("/dashboard/plans")}
+        >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to My CVs
+          Back to My Plans
         </Button>
       </div>
     );
@@ -104,17 +122,17 @@ export default function CvHistoryPage() {
         <div>
           <h1 className="text-2xl font-semibold">Version history</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every generation is kept. View the finished CV, share it, or delete
-            a version.
+            Every generation is kept. View the finished plan, share it, or
+            delete a version.
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => router.push("/dashboard/cvs")}
+          onClick={() => router.push("/dashboard/plans")}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          My CVs
+          My Plans
         </Button>
       </div>
 
@@ -142,13 +160,12 @@ export default function CvHistoryPage() {
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {new Date(version.createdAt).toLocaleString()}
-                {version.matchScore != null &&
-                  ` — ${version.matchScore}% match`}
+                {version.viabilityScore != null &&
+                  ` — ${version.viabilityScore}% viability`}
                 {version.style ? ` · ${version.style}` : ""}
                 {version.layout ? ` · ${version.layout}` : ""}
               </p>
             </div>
-
             <div className="flex items-center gap-2 shrink-0">
               <Button
                 size="sm"
@@ -162,7 +179,7 @@ export default function CvHistoryPage() {
                 variant="outline"
                 onClick={() =>
                   router.push(
-                    `/dashboard/cvs/${cvId}/history/${version._id}/edit`,
+                    `/dashboard/plans/${planId}/history/${version._id}/edit`,
                   )
                 }
               >
@@ -205,14 +222,15 @@ export default function CvHistoryPage() {
                 : "Loading..."}
             </DialogTitle>
           </DialogHeader>
-
           <div className="px-2 pb-6">
             {previewVersion && previewVersionId ? (
-              <CvAnimatedView
-                cv={cv}
-                version={previewVersion}
-                pdfUrl={`/api/cv/versions/${cvId}/${previewVersionId}/pdf`}
-              />
+              // No per-version PDF route exists for plans (unlike the old
+              // per-version CV pdf route) — pdfUrl is left unset, so
+              // PlanAnimatedView falls back to /api/plan/${plan.shareId}/pdf,
+              // which renders the *active* version's PDF, not necessarily
+              // this one. Fine for the in-app preview; worth a dedicated
+              // route later if per-version PDF download turns out to matter.
+              <PlanAnimatedView plan={plan} version={previewVersion} />
             ) : (
               <div className="text-sm text-muted-foreground py-16 text-center">
                 Loading version...
