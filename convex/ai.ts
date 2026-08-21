@@ -488,22 +488,28 @@ export const generatePlan = action({
 
       const prompt = buildPrompt(plan, calc, viability);
 
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
+      const response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            "HTTP-Referer":
+              process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "https://localhost",
+            "X-Title": "Business Plan AI",
+          },
+          body: JSON.stringify({
+            model: "anthropic/claude-sonnet-4", // or another OpenRouter model you prefer
+            max_tokens: 4096,
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" }, // helps enforce JSON
+          }),
         },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 4096,
-          messages: [{ role: "user", content: prompt }],
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errText = await response.text();
@@ -511,12 +517,9 @@ export const generatePlan = action({
       }
 
       const data = (await response.json()) as {
-        content: { type: string; text?: string }[];
+        choices: { message: { content: string } }[];
       };
-      const text = data.content
-        .map((block) => (block.type === "text" ? (block.text ?? "") : ""))
-        .join("\n")
-        .trim();
+      const text = data.choices?.[0]?.message?.content?.trim() ?? "";
 
       const generatedContent = parseGeneratedContent(text);
 
