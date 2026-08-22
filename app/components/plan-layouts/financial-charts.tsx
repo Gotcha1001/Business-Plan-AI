@@ -35,7 +35,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"; // npx shadcn add chart
 import { Button } from "@/components/ui/button";
-import { preparePlanData, money, pct } from "@/lib/plan-data";
+import { preparePlanData, pct } from "@/lib/plan-data";
+import { formatMoney } from "@/lib/currency";
 import { getChartPalette } from "@/lib/chart-theme";
 import { ViabilityBadge } from "../viability-badge";
 import type { PlanLayoutProps } from "./types";
@@ -72,7 +73,9 @@ export function FinancialChartsLayout({
     email,
     phone,
     website,
+    currency,
   } = preparePlanData(plan, version);
+  const money = formatMoney(currency);
 
   const palette = getChartPalette(theme);
 

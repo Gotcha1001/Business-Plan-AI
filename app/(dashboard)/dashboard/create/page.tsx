@@ -4,11 +4,17 @@
 // import {
 //   useForm,
 //   useFieldArray,
+//   useController,
+//   Controller,
 //   type Control,
 //   type UseFormRegister,
+//   type FieldPath,
+//   type FieldArrayPath,
+//   type FieldArray,
 // } from "react-hook-form";
 // import { useMutation, useAction, useQuery } from "convex/react";
 // import { useRouter, useSearchParams } from "next/navigation";
+// import type { FunctionArgs, FunctionReturnType } from "convex/server";
 // import { api } from "@/convex/_generated/api";
 // import type { Id } from "@/convex/_generated/dataModel";
 // import { Button } from "@/components/ui/button";
@@ -21,6 +27,13 @@
 // import { toast } from "sonner";
 // import { Plus, Trash2, Loader2 } from "lucide-react";
 
+// // NEW
+// import { LayoutSelect } from "@/app/components/layout-select";
+// import { StyleSelect } from "@/app/components/style-select";
+// import { CurrencySelect } from "@/app/components/currency-select";
+// import { GeneratingModal } from "@/app/components/generating-modal";
+// import { DEFAULT_CURRENCY_CODE } from "@/lib/currency";
+
 // // -----------------------------------------------------------------------
 // // Shared layout classes — same look as the CV app's section cards.
 // // -----------------------------------------------------------------------
@@ -28,6 +41,21 @@
 //   "space-y-3 rounded-2xl border border-zinc-900/10 dark:border-white/10 bg-white/60 dark:bg-white/5 p-5";
 // const ROW_CLASS =
 //   "grid gap-3 rounded-xl border border-zinc-900/10 dark:border-white/10 p-4 relative";
+
+// // -----------------------------------------------------------------------
+// // Literal unions for the <select> fields. These must match the schema's
+// // validator literals exactly — update both places together if the
+// // schema changes.
+// // -----------------------------------------------------------------------
+// type LegalStructure =
+//   | "sole_proprietorship"
+//   | "partnership"
+//   | "llc"
+//   | "corporation"
+//   | "nonprofit"
+//   | "other";
+// type Stage = "idea" | "pre_revenue" | "startup" | "growth" | "established";
+// type Scenario = "base" | "optimistic" | "pessimistic";
 
 // // -----------------------------------------------------------------------
 // // Form shape. Numbers are kept as `string` here (raw input value) and
@@ -38,10 +66,18 @@
 // type FormValues = {
 //   title: string;
 
+//   // NEW — currency lives on the plan itself (data, not per-version style).
+//   // layout/style are per-version in the schema, but there's nowhere else
+//   // in this form to choose them before the first generation, so they're
+//   // captured here and threaded into the generatePlan() call below.
+//   currency: string;
+//   layout: string;
+//   style: string;
+
 //   identity: {
 //     businessName: string;
 //     tradingName: string;
-//     legalStructure: string; // "" | union values
+//     legalStructure: string; // "" | LegalStructure, parsed on submit
 //     registrationDate: string;
 //     registrationNumber: string;
 //     physicalAddress: string;
@@ -52,7 +88,7 @@
 //     socialLinks: Row[]; // { label, url }
 //     logoUrl: string;
 //     foundingYear: string;
-//     stage: string;
+//     stage: string; // "" | Stage, parsed on submit
 //     industry: string;
 //     industryCode: string;
 //     missionStatement: string;
@@ -155,7 +191,7 @@
 //     taxRatePercent: string;
 //     inflationRatePercent: string;
 //     projectionHorizonMonths: string;
-//     scenario: string; // "" | base | optimistic | pessimistic
+//     scenario: string; // "" | Scenario, parsed on submit
 //   };
 
 //   kpis: {
@@ -178,6 +214,9 @@
 
 // const EMPTY_DEFAULTS: FormValues = {
 //   title: "",
+//   currency: DEFAULT_CURRENCY_CODE, // NEW
+//   layout: "executive-first", // NEW
+//   style: "", // NEW
 //   identity: {
 //     businessName: "",
 //     tradingName: "",
@@ -319,7 +358,11 @@
 //   placeholder?: string;
 // };
 
-// function RepeatingSection({
+// // `TName` is constrained to react-hook-form's own FieldArrayPath type, so
+// // callers can only pass a dot-path that genuinely points at an array field
+// // on FormValues (e.g. "team.owners") — TypeScript will reject a typo like
+// // "team.owner" at the call site instead of silently accepting `any`.
+// function RepeatingSection<TName extends FieldArrayPath<FormValues>>({
 //   control,
 //   register,
 //   name,
@@ -329,37 +372,32 @@
 // }: {
 //   control: Control<FormValues>;
 //   register: UseFormRegister<FormValues>;
-//   name: string; // dot-path into FormValues, e.g. "team.owners"
+//   name: TName;
 //   title: string;
 //   fields: RowFieldConfig[];
 //   addLabel?: string;
 // }) {
-//   // useFieldArray's generic typing gets awkward with a fully dynamic
-//   // dot-path across a large union type — cast at the boundary rather
-//   // than duplicating this component 20 times with exact types.
-//   const {
-//     fields: rows,
-//     append,
-//     remove,
-//   } = useFieldArray({
-//     control,
-//     name: name as any,
-//   });
-//   const emptyRow = () =>
+//   const { fields: rows, append, remove } = useFieldArray({ control, name });
+
+//   const emptyRow = (): Row =>
 //     Object.fromEntries(
 //       fields.map((f) => [f.name, f.type === "checkbox" ? false : ""]),
 //     );
+
+//   // Same limitation as the row `path` cast below: inside a generic function,
+//   // TypeScript can't narrow `FieldArray<FormValues, TName>` from an abstract
+//   // TName down to `Row`, even though every array field on FormValues really
+//   // is `Row[]`. Asserting to the library's own FieldArray type (not `any`)
+//   // is the accepted way to bridge that gap.
+//   function appendRow() {
+//     append(emptyRow() as FieldArray<FormValues, TName>);
+//   }
 
 //   return (
 //     <div className="space-y-3">
 //       <div className="flex items-center justify-between">
 //         <Label className="text-sm font-medium">{title}</Label>
-//         <Button
-//           type="button"
-//           variant="outline"
-//           size="sm"
-//           onClick={() => append(emptyRow())}
-//         >
+//         <Button type="button" variant="outline" size="sm" onClick={appendRow}>
 //           <Plus className="mr-1 h-3.5 w-3.5" />
 //           {addLabel}
 //         </Button>
@@ -381,7 +419,14 @@
 //           </button>
 //           <div className="grid gap-3 pr-8 sm:grid-cols-2">
 //             {fields.map((f) => {
-//               const path = `${name}.${index}.${f.name}` as any;
+//               // A fully dynamic `${name}.${index}.${f.name}` dot-path can't
+//               // be verified against FormValues at compile time — react-hook-form
+//               // has no way to type-check a path assembled at runtime. This
+//               // is the one place a manual assertion is unavoidable, so we
+//               // assert to the library's own FieldPath type (never `any`),
+//               // which still gives autocomplete/registration correctness.
+//               const path =
+//                 `${name}.${index}.${f.name}` as FieldPath<FormValues>;
 //               if (f.type === "checkbox") {
 //                 return (
 //                   <label
@@ -433,7 +478,7 @@
 //   placeholder,
 // }: {
 //   register: UseFormRegister<FormValues>;
-//   name: any;
+//   name: FieldPath<FormValues>;
 //   label: string;
 //   placeholder?: string;
 // }) {
@@ -445,19 +490,108 @@
 //   );
 // }
 
+// // Small controlled field for the logo upload. MediaUpload itself is
+// // upload-only (label / accept / onUploaded) and stays unchanged — this
+// // wrapper is what makes it play nicely with react-hook-form by writing
+// // the uploaded URL into `identity.logoUrl` via useController instead of
+// // the old raw-DOM `document.querySelector` hack.
+// function LogoUploadField({ control }: { control: Control<FormValues> }) {
+//   const { field } = useController({ control, name: "identity.logoUrl" });
+
+//   return (
+//     <div className="space-y-2">
+//       <MediaUpload
+//         label="Business logo"
+//         accept="image/*"
+//         onUploaded={(url) => field.onChange(url)}
+//       />
+//       {field.value && (
+//         <p className="truncate text-xs text-zinc-500">
+//           Current: <span className="break-all">{field.value}</span>
+//         </p>
+//       )}
+//     </div>
+//   );
+// }
+
 // // -----------------------------------------------------------------------
 // // Convert loaded plan doc -> form values (strings for all numbers,
 // // newline-joined for string arrays, safe fallbacks for every field).
+// // `BusinessPlanDoc` comes straight from Convex's own generated return
+// // type for the query, so this stays in sync with the schema automatically
+// // instead of accepting `plan: any`.
 // // -----------------------------------------------------------------------
-// function planToFormValues(plan: any): FormValues {
-//   const n = (v: number | undefined) =>
-//     v === undefined || v === null ? "" : String(v);
-//   const lines = (arr: string[] | undefined) => (arr ?? []).join("\n");
-//   const rows = (arr: any[] | undefined, mapRow: (r: any) => Row) =>
-//     (arr ?? []).map(mapRow);
 
+// type BusinessPlanDoc = NonNullable<
+//   FunctionReturnType<typeof api.businessPlans.getPlan>
+// >;
+
+// // NEW — explicit element types for every repeating section, so `rows()`
+// // never has to infer T through a chain of optional properties on a huge
+// // generated type. TS was silently giving up and typing every mapper
+// // callback param as `unknown` instead of erroring, which is why this
+// // wasn't obviously wrong until now.
+// type Team = NonNullable<BusinessPlanDoc["team"]>;
+// type Offerings = NonNullable<BusinessPlanDoc["offerings"]>;
+// type Market = NonNullable<BusinessPlanDoc["market"]>;
+// type MarketingSales = NonNullable<BusinessPlanDoc["marketingSales"]>;
+// type Operations = NonNullable<BusinessPlanDoc["operations"]>;
+// type Funding = NonNullable<BusinessPlanDoc["funding"]>;
+// type Financials = NonNullable<BusinessPlanDoc["financials"]>;
+// type Kpis = NonNullable<BusinessPlanDoc["kpis"]>;
+// type Appendix = NonNullable<BusinessPlanDoc["appendix"]>;
+
+// type OwnerDoc = NonNullable<Team["owners"]>[number];
+// type ManagementTeamDoc = NonNullable<Team["managementTeam"]>[number];
+// type PlannedHireDoc = NonNullable<Team["plannedHires"]>[number];
+// type AdvisorDoc = NonNullable<Team["advisors"]>[number];
+// type KeyPartnershipDoc = NonNullable<Team["keyPartnerships"]>[number];
+// type IntellectualPropertyDoc = NonNullable<
+//   Team["intellectualProperty"]
+// >[number];
+
+// type ProductDoc = NonNullable<Offerings["products"]>[number];
+
+// type CompetitorDoc = NonNullable<Market["competitors"]>[number];
+
+// type MarketingBudgetAllocationDoc = NonNullable<
+//   MarketingSales["marketingBudgetAllocation"]
+// >[number];
+
+// type EquipmentDoc = NonNullable<Operations["equipment"]>[number];
+// type OperationalRiskDoc = NonNullable<Operations["operationalRisks"]>[number];
+
+// type FundingSourceDoc = NonNullable<Funding["fundingSources"]>[number];
+// type StartupCostDoc = NonNullable<Funding["startupCosts"]>[number];
+
+// type RevenueStreamDoc = NonNullable<Financials["revenueStreams"]>[number];
+// type OperatingExpenseDoc = NonNullable<Financials["operatingExpenses"]>[number];
+// type LoanDoc = NonNullable<Financials["loans"]>[number];
+
+// type KpiRiskFactorDoc = NonNullable<Kpis["riskFactors"]>[number];
+
+// type AttachmentDoc = NonNullable<Appendix["attachments"]>[number];
+// type MilestoneDoc = NonNullable<Appendix["milestones"]>[number];
+
+// function n(v: number | undefined | null): string {
+//   return v === undefined || v === null ? "" : String(v);
+// }
+// function lines(arr: string[] | undefined): string {
+//   return (arr ?? []).join("\n");
+// }
+// function rows<T, R extends Row>(
+//   arr: T[] | undefined,
+//   mapRow: (item: T) => R,
+// ): R[] {
+//   return (arr ?? []).map(mapRow);
+// }
+
+// function planToFormValues(plan: BusinessPlanDoc): FormValues {
 //   return {
 //     title: plan.title ?? "",
+//     currency: plan.currency ?? DEFAULT_CURRENCY_CODE,
+//     layout: "executive-first",
+//     style: "",
 //     identity: {
 //       businessName: plan.identity?.businessName ?? "",
 //       tradingName: plan.identity?.tradingName ?? "",
@@ -469,10 +603,13 @@
 //       website: plan.identity?.website ?? "",
 //       phone: plan.identity?.phone ?? "",
 //       email: plan.identity?.email ?? "",
-//       socialLinks: rows(plan.identity?.socialLinks, (s) => ({
-//         label: s.label ?? "",
-//         url: s.url ?? "",
-//       })),
+//       socialLinks: rows(
+//         plan.identity?.socialLinks,
+//         (s: { label?: string; url?: string }) => ({
+//           label: s.label ?? "",
+//           url: s.url ?? "",
+//         }),
+//       ),
 //       logoUrl: plan.identity?.logoUrl ?? "",
 //       foundingYear: n(plan.identity?.foundingYear),
 //       stage: plan.identity?.stage ?? "",
@@ -489,41 +626,50 @@
 //       exitStrategy: plan.identity?.exitStrategy ?? "",
 //     },
 //     team: {
-//       owners: rows(plan.team?.owners, (o) => ({
+//       owners: rows(plan.team?.owners, (o: OwnerDoc) => ({
 //         name: o.name ?? "",
 //         ownershipPercent: n(o.ownershipPercent),
 //         role: o.role ?? "",
 //         bio: o.bio ?? "",
 //       })),
-//       managementTeam: rows(plan.team?.managementTeam, (m) => ({
-//         name: m.name ?? "",
-//         title: m.title ?? "",
-//         responsibilities: m.responsibilities ?? "",
-//         experience: m.experience ?? "",
-//       })),
+//       managementTeam: rows(
+//         plan.team?.managementTeam,
+//         (m: ManagementTeamDoc) => ({
+//           name: m.name ?? "",
+//           title: m.title ?? "",
+//           responsibilities: m.responsibilities ?? "",
+//           experience: m.experience ?? "",
+//         }),
+//       ),
 //       orgStructureDescription: plan.team?.orgStructureDescription ?? "",
-//       plannedHires: rows(plan.team?.plannedHires, (h) => ({
+//       plannedHires: rows(plan.team?.plannedHires, (h: PlannedHireDoc) => ({
 //         role: h.role ?? "",
 //         count: n(h.count),
 //         timeline: h.timeline ?? "",
 //         annualSalary: n(h.annualSalary),
 //       })),
-//       advisors: rows(plan.team?.advisors, (a) => ({
+//       advisors: rows(plan.team?.advisors, (a: AdvisorDoc) => ({
 //         name: a.name ?? "",
 //         role: a.role ?? "",
 //       })),
-//       keyPartnerships: rows(plan.team?.keyPartnerships, (p) => ({
-//         name: p.name ?? "",
-//         description: p.description ?? "",
-//       })),
+//       keyPartnerships: rows(
+//         plan.team?.keyPartnerships,
+//         (p: KeyPartnershipDoc) => ({
+//           name: p.name ?? "",
+//           description: p.description ?? "",
+//         }),
+//       ),
 //       licensesAndPermits: lines(plan.team?.licensesAndPermits),
-//       intellectualProperty: rows(plan.team?.intellectualProperty, (ip) => ({
-//         type: ip.type ?? "",
-//         description: ip.description ?? "",
-//       })),
+//       intellectualProperty: rows(
+//         plan.team?.intellectualProperty,
+//         (ip: IntellectualPropertyDoc) => ({
+//           type: ip.type ?? "",
+//           description: ip.description ?? "",
+//         }),
+//       ),
 //     },
 //     offerings: {
-//       products: rows(plan.offerings?.products, (p) => ({
+//       products: rows(plan.offerings?.products, (p: ProductDoc) => ({
 //         name: p.name ?? "",
 //         description: p.description ?? "",
 //         features: p.features ?? "",
@@ -545,7 +691,7 @@
 //       som: n(plan.market?.som),
 //       marketSizeSource: plan.market?.marketSizeSource ?? "",
 //       marketTrends: plan.market?.marketTrends ?? "",
-//       competitors: rows(plan.market?.competitors, (c) => ({
+//       competitors: rows(plan.market?.competitors, (c: CompetitorDoc) => ({
 //         name: c.name ?? "",
 //         strengths: c.strengths ?? "",
 //         weaknesses: c.weaknesses ?? "",
@@ -572,7 +718,7 @@
 //       retentionPlans: plan.marketingSales?.retentionPlans ?? "",
 //       marketingBudgetAllocation: rows(
 //         plan.marketingSales?.marketingBudgetAllocation,
-//         (b) => ({
+//         (b: MarketingBudgetAllocationDoc) => ({
 //           channel: b.channel ?? "",
 //           percentOfBudget: n(b.percentOfBudget),
 //         }),
@@ -581,7 +727,7 @@
 //     operations: {
 //       locations: lines(plan.operations?.locations),
 //       facilitiesNotes: plan.operations?.facilitiesNotes ?? "",
-//       equipment: rows(plan.operations?.equipment, (e) => ({
+//       equipment: rows(plan.operations?.equipment, (e: EquipmentDoc) => ({
 //         item: e.item ?? "",
 //         cost: n(e.cost),
 //         ownedOrLeased: e.ownedOrLeased ?? "",
@@ -592,22 +738,28 @@
 //       techStack: lines(plan.operations?.techStack),
 //       hoursOfOperation: plan.operations?.hoursOfOperation ?? "",
 //       scalabilityPlans: plan.operations?.scalabilityPlans ?? "",
-//       operationalRisks: rows(plan.operations?.operationalRisks, (r) => ({
-//         risk: r.risk ?? "",
-//         mitigation: r.mitigation ?? "",
-//       })),
+//       operationalRisks: rows(
+//         plan.operations?.operationalRisks,
+//         (r: OperationalRiskDoc) => ({
+//           risk: r.risk ?? "",
+//           mitigation: r.mitigation ?? "",
+//         }),
+//       ),
 //     },
 //     funding: {
-//       fundingSources: rows(plan.funding?.fundingSources, (s) => ({
-//         source: s.source ?? "",
-//         amount: n(s.amount),
-//         terms: s.terms ?? "",
-//       })),
+//       fundingSources: rows(
+//         plan.funding?.fundingSources,
+//         (s: FundingSourceDoc) => ({
+//           source: s.source ?? "",
+//           amount: n(s.amount),
+//           terms: s.terms ?? "",
+//         }),
+//       ),
 //       fundingRequestAmount: n(plan.funding?.fundingRequestAmount),
 //       equityOffered: plan.funding?.equityOffered ?? "",
 //       debtTerms: plan.funding?.debtTerms ?? "",
 //       collateral: plan.funding?.collateral ?? "",
-//       startupCosts: rows(plan.funding?.startupCosts, (c) => ({
+//       startupCosts: rows(plan.funding?.startupCosts, (c: StartupCostDoc) => ({
 //         category: c.category ?? "",
 //         amount: n(c.amount),
 //       })),
@@ -615,10 +767,13 @@
 //     financials: {
 //       monthlySalesVolume: n(plan.financials?.monthlySalesVolume),
 //       avgSellingPrice: n(plan.financials?.avgSellingPrice),
-//       revenueStreams: rows(plan.financials?.revenueStreams, (r) => ({
-//         name: r.name ?? "",
-//         percentOfRevenue: n(r.percentOfRevenue),
-//       })),
+//       revenueStreams: rows(
+//         plan.financials?.revenueStreams,
+//         (r: RevenueStreamDoc) => ({
+//           name: r.name ?? "",
+//           percentOfRevenue: n(r.percentOfRevenue),
+//         }),
+//       ),
 //       monthlyGrowthRatePercent: n(plan.financials?.monthlyGrowthRatePercent),
 //       seasonalityNotes: plan.financials?.seasonalityNotes ?? "",
 //       churnRatePercent: n(plan.financials?.churnRatePercent),
@@ -626,13 +781,16 @@
 //       directLaborPerUnit: n(plan.financials?.directLaborPerUnit),
 //       shippingCostPerUnit: n(plan.financials?.shippingCostPerUnit),
 //       otherVariableCostPerUnit: n(plan.financials?.otherVariableCostPerUnit),
-//       operatingExpenses: rows(plan.financials?.operatingExpenses, (e) => ({
-//         category: e.category ?? "",
-//         monthlyAmount: n(e.monthlyAmount),
-//         isFixed: !!e.isFixed,
-//       })),
+//       operatingExpenses: rows(
+//         plan.financials?.operatingExpenses,
+//         (e: OperatingExpenseDoc) => ({
+//           category: e.category ?? "",
+//           monthlyAmount: n(e.monthlyAmount),
+//           isFixed: !!e.isFixed,
+//         }),
+//       ),
 //       openingCashBalance: n(plan.financials?.openingCashBalance),
-//       loans: rows(plan.financials?.loans, (l) => ({
+//       loans: rows(plan.financials?.loans, (l: LoanDoc) => ({
 //         principal: n(l.principal),
 //         annualInterestRatePercent: n(l.annualInterestRatePercent),
 //         termMonths: n(l.termMonths),
@@ -649,7 +807,7 @@
 //       roiTargetPercent: n(plan.kpis?.roiTargetPercent),
 //       paybackPeriodTargetMonths: n(plan.kpis?.paybackPeriodTargetMonths),
 //       assumptions: lines(plan.kpis?.assumptions),
-//       riskFactors: rows(plan.kpis?.riskFactors, (r) => ({
+//       riskFactors: rows(plan.kpis?.riskFactors, (r: KpiRiskFactorDoc) => ({
 //         risk: r.risk ?? "",
 //         mitigation: r.mitigation ?? "",
 //       })),
@@ -657,11 +815,11 @@
 //     appendix: {
 //       historicalFinancialsNotes: plan.appendix?.historicalFinancialsNotes ?? "",
 //       marketResearchSources: lines(plan.appendix?.marketResearchSources),
-//       attachments: rows(plan.appendix?.attachments, (a) => ({
+//       attachments: rows(plan.appendix?.attachments, (a: AttachmentDoc) => ({
 //         label: a.label ?? "",
 //         url: a.url ?? "",
 //       })),
-//       milestones: rows(plan.appendix?.milestones, (m) => ({
+//       milestones: rows(plan.appendix?.milestones, (m: MilestoneDoc) => ({
 //         title: m.title ?? "",
 //         date: m.date ?? "",
 //         owner: m.owner ?? "",
@@ -692,14 +850,35 @@
 // function opt(v: string): string | undefined {
 //   return v.trim() === "" ? undefined : v;
 // }
+// // Narrows an already-validated form string down to one of the schema's
+// // literal unions (e.g. "llc" -> LegalStructure). The <select> elements
+// // only ever emit one of the listed <option value="..."> strings (or ""),
+// // so this reflects a real invariant rather than papering over one with
+// // `any` — but note it's still an assertion, not a runtime check. If the
+// // <option> values and the schema's validator union ever drift apart,
+// // this won't catch it.
+// function asLiteral<T extends string>(v: string | undefined): T | undefined {
+//   return v as T | undefined;
+// }
 
-// function formValuesToPlanFields(values: FormValues) {
+// // The shape Convex's `upsertPlan` mutation actually accepts, taken
+// // straight from the generated API types (minus the id/flag args, which
+// // are added at the call site). Using this instead of `any` means a
+// // mismatch between this form and the schema shows up as a real
+// // type error here rather than silently at runtime.
+// type UpsertPlanArgs = FunctionArgs<typeof api.businessPlans.upsertPlan>;
+// type PlanFields = Omit<UpsertPlanArgs, "planId" | "preserveStatus">;
+
+// function formValuesToPlanFields(values: FormValues): PlanFields {
 //   return {
 //     title: values.title || values.identity.businessName || "Untitled Plan",
+//     currency: values.currency, // NEW
 //     identity: {
 //       businessName: values.identity.businessName,
 //       tradingName: opt(values.identity.tradingName),
-//       legalStructure: opt(values.identity.legalStructure) as any,
+//       legalStructure: asLiteral<LegalStructure>(
+//         opt(values.identity.legalStructure),
+//       ),
 //       registrationDate: opt(values.identity.registrationDate),
 //       registrationNumber: opt(values.identity.registrationNumber),
 //       physicalAddress: opt(values.identity.physicalAddress),
@@ -713,7 +892,7 @@
 //       })),
 //       logoUrl: opt(values.identity.logoUrl),
 //       foundingYear: toNum(values.identity.foundingYear),
-//       stage: opt(values.identity.stage) as any,
+//       stage: asLiteral<Stage>(opt(values.identity.stage)),
 //       industry: opt(values.identity.industry),
 //       industryCode: opt(values.identity.industryCode),
 //       missionStatement: opt(values.identity.missionStatement),
@@ -882,7 +1061,7 @@
 //       taxRatePercent: toNum(values.financials.taxRatePercent),
 //       inflationRatePercent: toNum(values.financials.inflationRatePercent),
 //       projectionHorizonMonths: toNum(values.financials.projectionHorizonMonths),
-//       scenario: (opt(values.financials.scenario) as any) ?? "base",
+//       scenario: asLiteral<Scenario>(opt(values.financials.scenario)) ?? "base",
 //     },
 //     kpis: {
 //       grossMarginTargetPercent: toNum(values.kpis.grossMarginTargetPercent),
@@ -930,13 +1109,19 @@
 //     planId ? { planId } : "skip",
 //   );
 //   const upsertPlan = useMutation(api.businessPlans.upsertPlan);
-//   // convex/ai.ts needs a `generatePlan` action mirroring the CV app's
-//   // `generateCv` — see the "What's next" notes for what it should do.
-//   const generatePlan = useAction((api as any).ai.generatePlan);
+//   const generatePlan = useAction(api.ai.generatePlan);
 
 //   const [submitting, setSubmitting] = useState<"draft" | "generate" | null>(
 //     null,
 //   );
+
+//   // NEW — which plan (if any) we're currently waiting on generation for.
+//   // Setting this opens the GeneratingModal; the effect below watches the
+//   // plan's live status and clears it (navigating away) once it flips out
+//   // of "generating".
+//   const [generatingPlanId, setGeneratingPlanId] =
+//     useState<Id<"businessPlans"> | null>(null);
+
 //   const { control, register, handleSubmit, reset } = useForm<FormValues>({
 //     defaultValues: EMPTY_DEFAULTS,
 //   });
@@ -946,14 +1131,35 @@
 //     reset(planToFormValues(existingPlan));
 //   }, [existingPlan, reset]);
 
+//   // NEW — live-poll the plan being generated, purely to know when to
+//   // close the modal and navigate. Convex's reactivity means this updates
+//   // the instant convex/ai.ts flips status away from "generating".
+//   const watchedPlan = useQuery(
+//     api.businessPlans.getPlan,
+//     generatingPlanId ? { planId: generatingPlanId } : "skip",
+//   );
+
+//   useEffect(() => {
+//     if (!generatingPlanId || !watchedPlan) return;
+//     if (watchedPlan.status !== "generating") {
+//       const finishedId = generatingPlanId;
+//       setGeneratingPlanId(null);
+//       if (watchedPlan.status === "failed") {
+//         toast.error(watchedPlan.generationError ?? "Failed to generate plan");
+//       } else {
+//         router.push(`/dashboard/plans/${finishedId}/history`);
+//       }
+//     }
+//   }, [generatingPlanId, watchedPlan, router]);
+
 //   async function persist(values: FormValues, preserveStatus: boolean) {
 //     const fields = formValuesToPlanFields(values);
 //     const savedId = await upsertPlan({
 //       planId: planId ?? undefined,
 //       preserveStatus,
 //       ...fields,
-//     } as any);
-//     return savedId as Id<"businessPlans">;
+//     });
+//     return savedId;
 //   }
 
 //   async function onSaveDraft(values: FormValues) {
@@ -973,16 +1179,26 @@
 //     setSubmitting("generate");
 //     try {
 //       const savedId = await persist(values, false);
-//       await generatePlan({ planId: savedId });
-//       toast.success("Generating your business plan…");
-//       router.push(`/dashboard/plans/${savedId}/history`);
+//       // NEW — thread the chosen layout/style through so this plan doesn't
+//       // silently fall back to "executive-first" regardless of what was
+//       // picked (see PATCHES.md #3a for why that fallback happens).
+//       await generatePlan({
+//         planId: savedId,
+//         style: values.style || undefined,
+//         layout: values.layout,
+//       });
+//       setGeneratingPlanId(savedId); // opens GeneratingModal, replaces instant redirect
 //     } catch (err) {
 //       toast.error(
 //         err instanceof Error ? err.message : "Failed to generate plan",
 //       );
-//     } finally {
 //       setSubmitting(null);
 //     }
+//     // NOTE: `submitting` is intentionally left in "generate" state here on
+//     // the success path — the modal (not the button spinner) is now the
+//     // signal that generation is in progress, and it takes over until the
+//     // effect above navigates away. It's reset in the catch branch above
+//     // since that's the one path where the form stays on screen.
 //   }
 
 //   return (
@@ -992,6 +1208,53 @@
 //           Plan title (internal label)
 //         </Label>
 //         <Input {...register("title")} placeholder="e.g. Coffee Shop — v2" />
+//       </div>
+
+//       {/* NEW — currency / layout / style, set once before the first
+//           generation. These live outside the tabs since they apply to the
+//           whole plan rather than any one section. */}
+//       <div className={SECTION_CLASS}>
+//         <div className="grid gap-4 sm:grid-cols-3">
+//           <div className="space-y-1">
+//             <Label className="text-xs text-zinc-500">Currency</Label>
+//             <Controller
+//               name="currency"
+//               control={control}
+//               render={({ field }) => (
+//                 <CurrencySelect
+//                   value={field.value}
+//                   onValueChange={field.onChange}
+//                 />
+//               )}
+//             />
+//           </div>
+//           <div className="space-y-1">
+//             <Label className="text-xs text-zinc-500">Layout</Label>
+//             <Controller
+//               name="layout"
+//               control={control}
+//               render={({ field }) => (
+//                 <LayoutSelect
+//                   value={field.value}
+//                   onValueChange={field.onChange}
+//                 />
+//               )}
+//             />
+//           </div>
+//           <div className="space-y-1">
+//             <Label className="text-xs text-zinc-500">Style</Label>
+//             <Controller
+//               name="style"
+//               control={control}
+//               render={({ field }) => (
+//                 <StyleSelect
+//                   value={field.value}
+//                   onValueChange={field.onChange}
+//                 />
+//               )}
+//             />
+//           </div>
+//         </div>
 //       </div>
 
 //       <Tabs defaultValue="identity" className="w-full">
@@ -1098,18 +1361,7 @@
 
 //           <div className="space-y-1">
 //             <Label className="text-xs text-zinc-500">Logo</Label>
-//             {/* Reuses the CV app's Cloudinary uploader for logoUrl */}
-//             <MediaUpload
-//               value={undefined}
-//               onChange={(url: string) => {
-//                 const input = document.querySelector<HTMLInputElement>(
-//                   'input[name="identity.logoUrl"]',
-//                 );
-//                 if (input) input.value = url;
-//               }}
-//               kind="image"
-//             />
-//             <input type="hidden" {...register("identity.logoUrl")} />
+//             <LogoUploadField control={control} />
 //           </div>
 
 //           <div className="space-y-1">
@@ -1353,15 +1605,15 @@
 //               <Input {...register("market.marketSizeSource")} />
 //             </div>
 //             <div className="space-y-1">
-//               <Label className="text-xs text-zinc-500">TAM ($)</Label>
+//               <Label className="text-xs text-zinc-500">TAM</Label>
 //               <Input type="number" {...register("market.tam")} />
 //             </div>
 //             <div className="space-y-1">
-//               <Label className="text-xs text-zinc-500">SAM ($)</Label>
+//               <Label className="text-xs text-zinc-500">SAM</Label>
 //               <Input type="number" {...register("market.sam")} />
 //             </div>
 //             <div className="space-y-1">
-//               <Label className="text-xs text-zinc-500">SOM ($)</Label>
+//               <Label className="text-xs text-zinc-500">SOM</Label>
 //               <Input type="number" {...register("market.som")} />
 //             </div>
 //           </div>
@@ -1939,6 +2191,15 @@
 //           Generate plan
 //         </Button>
 //       </div>
+
+//       {/* NEW — replaces the old instant router.push() after generatePlan().
+//           `key` remounts the modal (resetting its internal message-cycling
+//           state) whenever a new plan starts generating. */}
+//       <GeneratingModal
+//         key={generatingPlanId ?? "idle"}
+//         open={!!generatingPlanId}
+//         title={watchedPlan?.title ?? "your business plan"}
+//       />
 //     </form>
 //   );
 // }
@@ -1952,7 +2213,6 @@
 //     </Suspense>
 //   );
 // }
-
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -1960,13 +2220,14 @@ import {
   useForm,
   useFieldArray,
   useController,
+  Controller,
   type Control,
   type UseFormRegister,
   type FieldPath,
   type FieldArrayPath,
   type FieldArray,
 } from "react-hook-form";
-import { useMutation, useAction, useQuery } from "convex/react";
+import { useMutation, useAction, useQuery, useConvex } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
@@ -1980,6 +2241,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MediaUpload } from "@/app/components/media-upload";
 import { toast } from "sonner";
 import { Plus, Trash2, Loader2 } from "lucide-react";
+
+// NEW
+import { LayoutSelect } from "@/app/components/layout-select";
+import { StyleSelect } from "@/app/components/style-select";
+import { CurrencySelect } from "@/app/components/currency-select";
+import { GeneratingModal } from "@/app/components/generating-modal";
+import { DEFAULT_CURRENCY_CODE } from "@/lib/currency";
 
 // -----------------------------------------------------------------------
 // Shared layout classes — same look as the CV app's section cards.
@@ -2012,6 +2280,14 @@ type Row = Record<string, string | boolean>;
 
 type FormValues = {
   title: string;
+
+  // NEW — currency lives on the plan itself (data, not per-version style).
+  // layout/style are per-version in the schema, but there's nowhere else
+  // in this form to choose them before the first generation, so they're
+  // captured here and threaded into the generatePlan() call below.
+  currency: string;
+  layout: string;
+  style: string;
 
   identity: {
     businessName: string;
@@ -2153,6 +2429,9 @@ type FormValues = {
 
 const EMPTY_DEFAULTS: FormValues = {
   title: "",
+  currency: DEFAULT_CURRENCY_CODE, // NEW
+  layout: "executive-first", // NEW
+  style: "", // NEW
   identity: {
     businessName: "",
     tradingName: "",
@@ -2457,9 +2736,57 @@ function LogoUploadField({ control }: { control: Control<FormValues> }) {
 // type for the query, so this stays in sync with the schema automatically
 // instead of accepting `plan: any`.
 // -----------------------------------------------------------------------
+
 type BusinessPlanDoc = NonNullable<
   FunctionReturnType<typeof api.businessPlans.getPlan>
 >;
+
+// NEW — explicit element types for every repeating section, so `rows()`
+// never has to infer T through a chain of optional properties on a huge
+// generated type. TS was silently giving up and typing every mapper
+// callback param as `unknown` instead of erroring, which is why this
+// wasn't obviously wrong until now.
+type Team = NonNullable<BusinessPlanDoc["team"]>;
+type Offerings = NonNullable<BusinessPlanDoc["offerings"]>;
+type Market = NonNullable<BusinessPlanDoc["market"]>;
+type MarketingSales = NonNullable<BusinessPlanDoc["marketingSales"]>;
+type Operations = NonNullable<BusinessPlanDoc["operations"]>;
+type Funding = NonNullable<BusinessPlanDoc["funding"]>;
+type Financials = NonNullable<BusinessPlanDoc["financials"]>;
+type Kpis = NonNullable<BusinessPlanDoc["kpis"]>;
+type Appendix = NonNullable<BusinessPlanDoc["appendix"]>;
+
+type OwnerDoc = NonNullable<Team["owners"]>[number];
+type ManagementTeamDoc = NonNullable<Team["managementTeam"]>[number];
+type PlannedHireDoc = NonNullable<Team["plannedHires"]>[number];
+type AdvisorDoc = NonNullable<Team["advisors"]>[number];
+type KeyPartnershipDoc = NonNullable<Team["keyPartnerships"]>[number];
+type IntellectualPropertyDoc = NonNullable<
+  Team["intellectualProperty"]
+>[number];
+
+type ProductDoc = NonNullable<Offerings["products"]>[number];
+
+type CompetitorDoc = NonNullable<Market["competitors"]>[number];
+
+type MarketingBudgetAllocationDoc = NonNullable<
+  MarketingSales["marketingBudgetAllocation"]
+>[number];
+
+type EquipmentDoc = NonNullable<Operations["equipment"]>[number];
+type OperationalRiskDoc = NonNullable<Operations["operationalRisks"]>[number];
+
+type FundingSourceDoc = NonNullable<Funding["fundingSources"]>[number];
+type StartupCostDoc = NonNullable<Funding["startupCosts"]>[number];
+
+type RevenueStreamDoc = NonNullable<Financials["revenueStreams"]>[number];
+type OperatingExpenseDoc = NonNullable<Financials["operatingExpenses"]>[number];
+type LoanDoc = NonNullable<Financials["loans"]>[number];
+
+type KpiRiskFactorDoc = NonNullable<Kpis["riskFactors"]>[number];
+
+type AttachmentDoc = NonNullable<Appendix["attachments"]>[number];
+type MilestoneDoc = NonNullable<Appendix["milestones"]>[number];
 
 function n(v: number | undefined | null): string {
   return v === undefined || v === null ? "" : String(v);
@@ -2477,6 +2804,9 @@ function rows<T, R extends Row>(
 function planToFormValues(plan: BusinessPlanDoc): FormValues {
   return {
     title: plan.title ?? "",
+    currency: plan.currency ?? DEFAULT_CURRENCY_CODE,
+    layout: "executive-first",
+    style: "",
     identity: {
       businessName: plan.identity?.businessName ?? "",
       tradingName: plan.identity?.tradingName ?? "",
@@ -2488,10 +2818,13 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       website: plan.identity?.website ?? "",
       phone: plan.identity?.phone ?? "",
       email: plan.identity?.email ?? "",
-      socialLinks: rows(plan.identity?.socialLinks, (s) => ({
-        label: s.label ?? "",
-        url: s.url ?? "",
-      })),
+      socialLinks: rows(
+        plan.identity?.socialLinks,
+        (s: { label?: string; url?: string }) => ({
+          label: s.label ?? "",
+          url: s.url ?? "",
+        }),
+      ),
       logoUrl: plan.identity?.logoUrl ?? "",
       foundingYear: n(plan.identity?.foundingYear),
       stage: plan.identity?.stage ?? "",
@@ -2508,41 +2841,50 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       exitStrategy: plan.identity?.exitStrategy ?? "",
     },
     team: {
-      owners: rows(plan.team?.owners, (o) => ({
+      owners: rows(plan.team?.owners, (o: OwnerDoc) => ({
         name: o.name ?? "",
         ownershipPercent: n(o.ownershipPercent),
         role: o.role ?? "",
         bio: o.bio ?? "",
       })),
-      managementTeam: rows(plan.team?.managementTeam, (m) => ({
-        name: m.name ?? "",
-        title: m.title ?? "",
-        responsibilities: m.responsibilities ?? "",
-        experience: m.experience ?? "",
-      })),
+      managementTeam: rows(
+        plan.team?.managementTeam,
+        (m: ManagementTeamDoc) => ({
+          name: m.name ?? "",
+          title: m.title ?? "",
+          responsibilities: m.responsibilities ?? "",
+          experience: m.experience ?? "",
+        }),
+      ),
       orgStructureDescription: plan.team?.orgStructureDescription ?? "",
-      plannedHires: rows(plan.team?.plannedHires, (h) => ({
+      plannedHires: rows(plan.team?.plannedHires, (h: PlannedHireDoc) => ({
         role: h.role ?? "",
         count: n(h.count),
         timeline: h.timeline ?? "",
         annualSalary: n(h.annualSalary),
       })),
-      advisors: rows(plan.team?.advisors, (a) => ({
+      advisors: rows(plan.team?.advisors, (a: AdvisorDoc) => ({
         name: a.name ?? "",
         role: a.role ?? "",
       })),
-      keyPartnerships: rows(plan.team?.keyPartnerships, (p) => ({
-        name: p.name ?? "",
-        description: p.description ?? "",
-      })),
+      keyPartnerships: rows(
+        plan.team?.keyPartnerships,
+        (p: KeyPartnershipDoc) => ({
+          name: p.name ?? "",
+          description: p.description ?? "",
+        }),
+      ),
       licensesAndPermits: lines(plan.team?.licensesAndPermits),
-      intellectualProperty: rows(plan.team?.intellectualProperty, (ip) => ({
-        type: ip.type ?? "",
-        description: ip.description ?? "",
-      })),
+      intellectualProperty: rows(
+        plan.team?.intellectualProperty,
+        (ip: IntellectualPropertyDoc) => ({
+          type: ip.type ?? "",
+          description: ip.description ?? "",
+        }),
+      ),
     },
     offerings: {
-      products: rows(plan.offerings?.products, (p) => ({
+      products: rows(plan.offerings?.products, (p: ProductDoc) => ({
         name: p.name ?? "",
         description: p.description ?? "",
         features: p.features ?? "",
@@ -2564,7 +2906,7 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       som: n(plan.market?.som),
       marketSizeSource: plan.market?.marketSizeSource ?? "",
       marketTrends: plan.market?.marketTrends ?? "",
-      competitors: rows(plan.market?.competitors, (c) => ({
+      competitors: rows(plan.market?.competitors, (c: CompetitorDoc) => ({
         name: c.name ?? "",
         strengths: c.strengths ?? "",
         weaknesses: c.weaknesses ?? "",
@@ -2591,7 +2933,7 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       retentionPlans: plan.marketingSales?.retentionPlans ?? "",
       marketingBudgetAllocation: rows(
         plan.marketingSales?.marketingBudgetAllocation,
-        (b) => ({
+        (b: MarketingBudgetAllocationDoc) => ({
           channel: b.channel ?? "",
           percentOfBudget: n(b.percentOfBudget),
         }),
@@ -2600,7 +2942,7 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
     operations: {
       locations: lines(plan.operations?.locations),
       facilitiesNotes: plan.operations?.facilitiesNotes ?? "",
-      equipment: rows(plan.operations?.equipment, (e) => ({
+      equipment: rows(plan.operations?.equipment, (e: EquipmentDoc) => ({
         item: e.item ?? "",
         cost: n(e.cost),
         ownedOrLeased: e.ownedOrLeased ?? "",
@@ -2611,22 +2953,28 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       techStack: lines(plan.operations?.techStack),
       hoursOfOperation: plan.operations?.hoursOfOperation ?? "",
       scalabilityPlans: plan.operations?.scalabilityPlans ?? "",
-      operationalRisks: rows(plan.operations?.operationalRisks, (r) => ({
-        risk: r.risk ?? "",
-        mitigation: r.mitigation ?? "",
-      })),
+      operationalRisks: rows(
+        plan.operations?.operationalRisks,
+        (r: OperationalRiskDoc) => ({
+          risk: r.risk ?? "",
+          mitigation: r.mitigation ?? "",
+        }),
+      ),
     },
     funding: {
-      fundingSources: rows(plan.funding?.fundingSources, (s) => ({
-        source: s.source ?? "",
-        amount: n(s.amount),
-        terms: s.terms ?? "",
-      })),
+      fundingSources: rows(
+        plan.funding?.fundingSources,
+        (s: FundingSourceDoc) => ({
+          source: s.source ?? "",
+          amount: n(s.amount),
+          terms: s.terms ?? "",
+        }),
+      ),
       fundingRequestAmount: n(plan.funding?.fundingRequestAmount),
       equityOffered: plan.funding?.equityOffered ?? "",
       debtTerms: plan.funding?.debtTerms ?? "",
       collateral: plan.funding?.collateral ?? "",
-      startupCosts: rows(plan.funding?.startupCosts, (c) => ({
+      startupCosts: rows(plan.funding?.startupCosts, (c: StartupCostDoc) => ({
         category: c.category ?? "",
         amount: n(c.amount),
       })),
@@ -2634,10 +2982,13 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
     financials: {
       monthlySalesVolume: n(plan.financials?.monthlySalesVolume),
       avgSellingPrice: n(plan.financials?.avgSellingPrice),
-      revenueStreams: rows(plan.financials?.revenueStreams, (r) => ({
-        name: r.name ?? "",
-        percentOfRevenue: n(r.percentOfRevenue),
-      })),
+      revenueStreams: rows(
+        plan.financials?.revenueStreams,
+        (r: RevenueStreamDoc) => ({
+          name: r.name ?? "",
+          percentOfRevenue: n(r.percentOfRevenue),
+        }),
+      ),
       monthlyGrowthRatePercent: n(plan.financials?.monthlyGrowthRatePercent),
       seasonalityNotes: plan.financials?.seasonalityNotes ?? "",
       churnRatePercent: n(plan.financials?.churnRatePercent),
@@ -2645,13 +2996,16 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       directLaborPerUnit: n(plan.financials?.directLaborPerUnit),
       shippingCostPerUnit: n(plan.financials?.shippingCostPerUnit),
       otherVariableCostPerUnit: n(plan.financials?.otherVariableCostPerUnit),
-      operatingExpenses: rows(plan.financials?.operatingExpenses, (e) => ({
-        category: e.category ?? "",
-        monthlyAmount: n(e.monthlyAmount),
-        isFixed: !!e.isFixed,
-      })),
+      operatingExpenses: rows(
+        plan.financials?.operatingExpenses,
+        (e: OperatingExpenseDoc) => ({
+          category: e.category ?? "",
+          monthlyAmount: n(e.monthlyAmount),
+          isFixed: !!e.isFixed,
+        }),
+      ),
       openingCashBalance: n(plan.financials?.openingCashBalance),
-      loans: rows(plan.financials?.loans, (l) => ({
+      loans: rows(plan.financials?.loans, (l: LoanDoc) => ({
         principal: n(l.principal),
         annualInterestRatePercent: n(l.annualInterestRatePercent),
         termMonths: n(l.termMonths),
@@ -2668,7 +3022,7 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
       roiTargetPercent: n(plan.kpis?.roiTargetPercent),
       paybackPeriodTargetMonths: n(plan.kpis?.paybackPeriodTargetMonths),
       assumptions: lines(plan.kpis?.assumptions),
-      riskFactors: rows(plan.kpis?.riskFactors, (r) => ({
+      riskFactors: rows(plan.kpis?.riskFactors, (r: KpiRiskFactorDoc) => ({
         risk: r.risk ?? "",
         mitigation: r.mitigation ?? "",
       })),
@@ -2676,11 +3030,11 @@ function planToFormValues(plan: BusinessPlanDoc): FormValues {
     appendix: {
       historicalFinancialsNotes: plan.appendix?.historicalFinancialsNotes ?? "",
       marketResearchSources: lines(plan.appendix?.marketResearchSources),
-      attachments: rows(plan.appendix?.attachments, (a) => ({
+      attachments: rows(plan.appendix?.attachments, (a: AttachmentDoc) => ({
         label: a.label ?? "",
         url: a.url ?? "",
       })),
-      milestones: rows(plan.appendix?.milestones, (m) => ({
+      milestones: rows(plan.appendix?.milestones, (m: MilestoneDoc) => ({
         title: m.title ?? "",
         date: m.date ?? "",
         owner: m.owner ?? "",
@@ -2733,6 +3087,7 @@ type PlanFields = Omit<UpsertPlanArgs, "planId" | "preserveStatus">;
 function formValuesToPlanFields(values: FormValues): PlanFields {
   return {
     title: values.title || values.identity.businessName || "Untitled Plan",
+    currency: values.currency, // NEW
     identity: {
       businessName: values.identity.businessName,
       tradingName: opt(values.identity.tradingName),
@@ -2969,17 +3324,27 @@ function CreateBusinessPlanForm() {
     planId ? { planId } : "skip",
   );
   const upsertPlan = useMutation(api.businessPlans.upsertPlan);
-  // NOTE: convex/ai.ts and its `generatePlan` action don't exist yet — this
-  // is the "biggest remaining piece of work" item from the plan. Once that
-  // file exports `generatePlan`, Convex codegen will type `api.ai.generatePlan`
-  // automatically and this line just works with zero cast. Left uncast on
-  // purpose (rather than `(api as any).ai.generatePlan`) so it surfaces as a
-  // real, honest compile error until that action is written.
   const generatePlan = useAction(api.ai.generatePlan);
+  // FIX — the Convex client itself, used below for a one-off (non-reactive)
+  // status fetch once generatePlan() finishes. The live `watchedPlan`
+  // query further down is reactive and can lag or skip the exact moment
+  // the plan's status flips to "generating" and back — that's what made
+  // the modal get stuck open forever. A direct client.query() call right
+  // after the action resolves always returns the current committed state,
+  // no race possible.
+  const convex = useConvex();
 
   const [submitting, setSubmitting] = useState<"draft" | "generate" | null>(
     null,
   );
+
+  // NEW — which plan (if any) we're currently waiting on generation for.
+  // Setting this opens the GeneratingModal. Closing it is now driven
+  // directly from onGenerate() once generatePlan() resolves (see below),
+  // not from watching this plan's live status.
+  const [generatingPlanId, setGeneratingPlanId] =
+    useState<Id<"businessPlans"> | null>(null);
+
   const { control, register, handleSubmit, reset } = useForm<FormValues>({
     defaultValues: EMPTY_DEFAULTS,
   });
@@ -2988,6 +3353,14 @@ function CreateBusinessPlanForm() {
     if (!existingPlan) return;
     reset(planToFormValues(existingPlan));
   }, [existingPlan, reset]);
+
+  // NEW — live-read of the plan being generated, used purely to show its
+  // title in the modal ("Generating '<title>'"). Not used to decide when
+  // to close the modal anymore — see onGenerate() for why.
+  const watchedPlan = useQuery(
+    api.businessPlans.getPlan,
+    generatingPlanId ? { planId: generatingPlanId } : "skip",
+  );
 
   async function persist(values: FormValues, preserveStatus: boolean) {
     const fields = formValuesToPlanFields(values);
@@ -3016,15 +3389,47 @@ function CreateBusinessPlanForm() {
     setSubmitting("generate");
     try {
       const savedId = await persist(values, false);
-      await generatePlan({ planId: savedId });
-      toast.success("Generating your business plan…");
-      router.push(`/dashboard/plans/${savedId}/history`);
+
+      // Open the modal *before* kicking off generation, not after —
+      // otherwise it never has a chance to render (it would open only
+      // once generation was already finished).
+      setGeneratingPlanId(savedId);
+
+      // NEW — thread the chosen layout/style through so this plan doesn't
+      // silently fall back to "executive-first" regardless of what was
+      // picked (see PATCHES.md #3a for why that fallback happens).
+      await generatePlan({
+        planId: savedId,
+        style: values.style || undefined,
+        layout: values.layout,
+      });
+
+      // FIX — `generatePlan` only resolves once generation has actually
+      // finished on the server, so its resolution is itself the "done"
+      // signal — we don't need to watch/poll for a status change. What we
+      // do need is the *final* status, and the live `watchedPlan` query
+      // isn't safe to read here: React state from useQuery can lag a
+      // render behind the server, or (per the schema here) may never
+      // surface an intermediate "generating" value at all, which is what
+      // left the modal open forever. A direct, one-off client.query()
+      // call always returns the current committed row, no race possible.
+      const finalPlan = await convex.query(api.businessPlans.getPlan, {
+        planId: savedId,
+      });
+
+      setGeneratingPlanId(null);
+      setSubmitting(null);
+      if (finalPlan?.status === "failed") {
+        toast.error(finalPlan.generationError ?? "Failed to generate plan");
+      } else {
+        router.push(`/dashboard/plans/${savedId}/history`);
+      }
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to generate plan",
       );
-    } finally {
       setSubmitting(null);
+      setGeneratingPlanId(null); // close the modal on a hard error too
     }
   }
 
@@ -3035,6 +3440,53 @@ function CreateBusinessPlanForm() {
           Plan title (internal label)
         </Label>
         <Input {...register("title")} placeholder="e.g. Coffee Shop — v2" />
+      </div>
+
+      {/* NEW — currency / layout / style, set once before the first
+          generation. These live outside the tabs since they apply to the
+          whole plan rather than any one section. */}
+      <div className={SECTION_CLASS}>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">Currency</Label>
+            <Controller
+              name="currency"
+              control={control}
+              render={({ field }) => (
+                <CurrencySelect
+                  value={field.value}
+                  onValueChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">Layout</Label>
+            <Controller
+              name="layout"
+              control={control}
+              render={({ field }) => (
+                <LayoutSelect
+                  value={field.value}
+                  onValueChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">Style</Label>
+            <Controller
+              name="style"
+              control={control}
+              render={({ field }) => (
+                <StyleSelect
+                  value={field.value}
+                  onValueChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="identity" className="w-full">
@@ -3385,15 +3837,15 @@ function CreateBusinessPlanForm() {
               <Input {...register("market.marketSizeSource")} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">TAM ($)</Label>
+              <Label className="text-xs text-zinc-500">TAM</Label>
               <Input type="number" {...register("market.tam")} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">SAM ($)</Label>
+              <Label className="text-xs text-zinc-500">SAM</Label>
               <Input type="number" {...register("market.sam")} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">SOM ($)</Label>
+              <Label className="text-xs text-zinc-500">SOM</Label>
               <Input type="number" {...register("market.som")} />
             </div>
           </div>
@@ -3971,6 +4423,15 @@ function CreateBusinessPlanForm() {
           Generate plan
         </Button>
       </div>
+
+      {/* NEW — replaces the old instant router.push() after generatePlan().
+          `key` remounts the modal (resetting its internal message-cycling
+          state) whenever a new plan starts generating. */}
+      <GeneratingModal
+        key={generatingPlanId ?? "idle"}
+        open={!!generatingPlanId}
+        title={watchedPlan?.title ?? "your business plan"}
+      />
     </form>
   );
 }

@@ -89,6 +89,7 @@ export default defineSchema({
       longTermGoals: v.array(v.string()), // 5+ years
       exitStrategy: v.optional(v.string()),
     }),
+    currency: v.optional(v.string()),
 
     // ---- 2. Ownership, Team & Organization ----
     team: v.object({

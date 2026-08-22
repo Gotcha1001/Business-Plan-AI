@@ -11,7 +11,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { FilePlus2, FileText, Settings, LayoutDashboard } from "lucide-react";
+import {
+  FilePlus2,
+  FileText,
+  Settings,
+  LayoutDashboard,
+  HelpCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -21,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/create", label: "New Plan", icon: FilePlus2 },
   { href: "/dashboard/plans", label: "My Plans", icon: FileText },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/help", label: "Help", icon: HelpCircle },
 ];
 
 export function AppSidebar() {

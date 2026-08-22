@@ -26,7 +26,8 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { PdfLayoutData } from "./types";
-import { money, pct } from "@/lib/plan-data";
+import { pct } from "@/lib/plan-data";
+import { formatMoney } from "@/lib/currency";
 
 const NARRATIVE_SECTIONS: {
   title: string;
@@ -225,7 +226,9 @@ export function buildInvestorDeckPdfDocument(data: PdfLayoutData) {
     address,
     logoUrl,
     socialLinks,
+    currency,
   } = data;
+  const money = formatMoney(currency);
   const styles = buildStyles(theme);
 
   const { fundingRequestAmount, equityOffered } = plan.funding;

@@ -26,6 +26,9 @@ import {
   type PlanStyleTheme,
 } from "./styles";
 import type { GeneratedPlanContent } from "./plan-types";
+// NEW
+export { formatMoney } from "@/lib/currency";
+import { DEFAULT_CURRENCY_CODE } from "@/lib/currency";
 
 type Plan = Doc<"businessPlans">;
 type PlanVersion = Doc<"businessPlanVersions">;
@@ -65,6 +68,7 @@ export interface PreparedPlanData {
   calc: CalculatedFinancials;
   viability: PlanVersion["viabilityAnalysis"];
   theme: PlanStyleTheme;
+  currency: string;
   businessName: string;
   tagline: string | undefined;
   stage: string | undefined;
@@ -91,6 +95,7 @@ export function preparePlanData(
     calc,
     viability: version.viabilityAnalysis,
     theme: getPlanTheme(version.style),
+    currency: plan.currency ?? DEFAULT_CURRENCY_CODE, // NEW
     businessName: identity.tradingName || identity.businessName,
     tagline: identity.uniqueValueProposition || identity.problemStatement,
     stage: identity.stage,
@@ -104,16 +109,6 @@ export function preparePlanData(
     equityOffered: plan.funding.equityOffered,
     socialLinks: identity.socialLinks ?? [],
   };
-}
-
-/** Shared currency/percent formatters so every layout renders numbers identically. */
-export function money(n: number | null | undefined): string {
-  if (n === null || n === undefined || Number.isNaN(n)) return "n/a";
-  return n.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
 }
 
 export function pct(n: number | null | undefined): string {
