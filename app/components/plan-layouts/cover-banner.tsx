@@ -11,9 +11,10 @@
 import { motion } from "framer-motion";
 import { Mail, Phone, MapPin, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { preparePlanData, money, pct } from "@/lib/plan-data";
+import { preparePlanData, pct } from "@/lib/plan-data";
 import { ViabilityBadge } from "../viability-badge";
 import type { PlanLayoutProps } from "./types";
+import { formatMoney } from "@/lib/currency";
 
 const NARRATIVE_SECTIONS: {
   title: string;
@@ -45,7 +46,9 @@ export function CoverBannerLayout({ plan, version, pdfUrl }: PlanLayoutProps) {
     website,
     logoUrl,
     socialLinks,
+    currency,
   } = preparePlanData(plan, version);
+  const money = formatMoney(currency);
 
   return (
     <div className="max-w-4xl mx-auto py-10 px-4">

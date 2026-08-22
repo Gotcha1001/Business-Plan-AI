@@ -23,6 +23,7 @@ export interface PdfLayoutData {
   website?: string;
   logoUrl?: string;
   socialLinks: Array<{ label: string; url: string }>;
+  currency: string;
 }
 
 /** Same digit-stripping as the web preview's WhatsApp-style contact links. */

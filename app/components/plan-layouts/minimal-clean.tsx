@@ -13,7 +13,8 @@
 
 import { Mail, Phone, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { preparePlanData, money, pct } from "@/lib/plan-data";
+import { preparePlanData, pct } from "@/lib/plan-data";
+import { formatMoney } from "@/lib/currency";
 import type { PlanLayoutProps } from "./types";
 
 const NARRATIVE_SECTIONS: {
@@ -45,7 +46,9 @@ export function MinimalCleanLayout({ plan, version, pdfUrl }: PlanLayoutProps) {
     phone,
     website,
     logoUrl,
+    currency,
   } = preparePlanData(plan, version);
+  const money = formatMoney(currency);
 
   const ruleClass = `border-b pb-1 mb-3 ${theme.web.borderSoft}`;
 

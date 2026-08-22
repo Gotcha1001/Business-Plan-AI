@@ -20,7 +20,8 @@
 import { motion } from "framer-motion";
 import { Mail, Phone, MapPin, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { preparePlanData, money, pct } from "@/lib/plan-data";
+import { preparePlanData, pct } from "@/lib/plan-data";
+import { formatMoney } from "@/lib/currency";
 import { ViabilityBadge } from "../viability-badge";
 import type { PlanLayoutProps } from "./types";
 
@@ -80,7 +81,10 @@ export function InvestorDeckLayout({ plan, version, pdfUrl }: PlanLayoutProps) {
     address,
     fundingRequestAmount,
     equityOffered,
+    logoUrl,
+    currency,
   } = preparePlanData(plan, version);
+  const money = formatMoney(currency);
 
   const narrativeSlides = NARRATIVE_SECTIONS.filter(({ key }) => g[key]);
   // Cover isn't numbered (it's the title slide), so numbering starts at
@@ -127,6 +131,21 @@ export function InvestorDeckLayout({ plan, version, pdfUrl }: PlanLayoutProps) {
         <p className="text-xs uppercase tracking-[0.2em] text-white/70 mb-4">
           Investor Deck
         </p>
+        {logoUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex justify-center mb-4"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoUrl}
+              alt={`${businessName} logo`}
+              className="h-20 w-20 object-contain rounded-xl mx-auto"
+            />
+          </motion.div>
+        )}
         <h1 className="text-3xl md:text-4xl font-semibold text-white">
           {businessName}
         </h1>

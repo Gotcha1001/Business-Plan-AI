@@ -299,6 +299,7 @@ export const upsertPlan = mutation({
     planId: v.optional(v.id("businessPlans")),
     preserveStatus: v.optional(v.boolean()),
     ...planFields,
+    currency: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
